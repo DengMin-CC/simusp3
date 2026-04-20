@@ -1,0 +1,10 @@
+# MATLAB
+*.asv
+*.mat
+
+# SP3 binary files
+*.sp3
+
+# Windows
+Thumbs.db
+Desktop.ini
