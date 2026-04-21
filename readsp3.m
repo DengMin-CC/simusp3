@@ -1,6 +1,6 @@
 function [sp3p,NoEp,MaxSat,sp3int] = readsp3(insp3)
 
-global NsatGPS NsatGLO NsatGAL NsatCMP NsatLEO
+global NsatGPS NsatGLO NsatGAL NsatCMP NsatLEO NsatLEO
 
 [fid,errmsg] = fopen(insp3,'r');
 
@@ -11,34 +11,49 @@ end
 
 MaxSat = NsatGPS + NsatGLO + NsatGAL + NsatCMP + NsatLEO;
 
+% --- First pass: count epoch lines (*) and parse header ---
+NoEp = 0;
+sp3int = 30;
+ts_str = '';
+NoSat = 0;
 while ~feof(fid)
     tline = fgetl(fid);
-    if strcmp(tline(1),'#') && ~strcmp(tline(1:2),'##')
-        
+    if isempty(tline), continue; end
+    if tline(1) == '*'
+        NoEp = NoEp + 1;
+    elseif strcmp(tline(1),'#') && ~strcmp(tline(1:2),'##')
         date = sscanf(tline(4:31),'%f',[1,6]);
-        ts_str = datestr(date,'yyyy-mm-dd HH:MM:SS');
-        NoEp = sscanf(tline(32:39),'%f');
-        NoEp = NoEp+1;
-        sp3p.recef = NaN(NoEp,4,MaxSat);
-        sp3p.reci = NaN(NoEp,3,MaxSat);
-        sp3p.recefe = NaN(NoEp,4,MaxSat);
-        sp3p.recie = NaN(NoEp,3,MaxSat);
-        sp3p.t = NaN(NoEp,1);
-    end
-    if strcmp(tline(1:2),'##')
+        if ~isempty(date) && length(date) == 6
+            ts_str = datestr(date,'yyyy-mm-dd HH:MM:SS');
+        end
+    elseif strcmp(tline(1:2),'##')
         sp3int = sscanf(tline(25:38),'%f');
-    end
-    if strcmp(tline(1),'+') && ~strcmp(tline(1:2),'++')
+    elseif strcmp(tline(1),'+') && ~strcmp(tline(1:2),'++')
         temp = sscanf(tline(2:6),'%d');
         if ~isnan(temp)
             NoSat = temp;
         end
     end
-    if strcmp(tline(1:2),'++') || strcmp(tline(1),'%') || strcmp(tline(1),'/')
+end
+
+% Initialize arrays with counted epoch number
+sp3p.recef  = NaN(NoEp,4,MaxSat);
+sp3p.reci   = NaN(NoEp,3,MaxSat);
+sp3p.recefe = NaN(NoEp,4,MaxSat);
+sp3p.recie  = NaN(NoEp,3,MaxSat);
+sp3p.t      = NaN(NoEp,1);
+
+% --- Second pass: read epoch data ---
+frewind(fid);
+while ~feof(fid)
+    tline = fgetl(fid);
+    if isempty(tline), continue; end
+    % Skip header lines
+    if tline(1) == '#' || tline(1) == '+' || tline(1) == '%' || tline(1) == '/'
         continue
     end
     % new epoch
-    if strcmp(tline(1),'*')
+    if tline(1) == '*'
         ep = sscanf(tline(2:end),'%f',[1,6]);
         tc_str=datestr(ep,'yyyy-mm-dd HH:MM:SS');
         epno = (etime(datevec(tc_str),datevec(ts_str))/sp3int) + 1;
@@ -61,8 +76,8 @@ while ~feof(fid)
             % writing part
             temp = sscanf(tline(5:end),'%f',[1,4]);
             sp3p.recef(epno,1:3,sno) = temp(1:3)*1000; %meter
-            sp3p.recef(epno,  4,sno) = temp(4)*10^-6;  %second 
-        end        
+            sp3p.recef(epno,  4,sno) = temp(4)*10^-6;  %second
+        end
     end
 end
 fclose('all');
