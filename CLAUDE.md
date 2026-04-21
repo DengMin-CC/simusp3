@@ -156,33 +156,24 @@
     ├── start-claude-glm.cmd    # Claude Code 启动脚本（GLM 模型）
     │
     ├── whu22924.sp3            # [输入] 联合 SP3（GPS 周 2292, DOY 348, 30s, GNSS+LEO 无误差）
-    ├── whu22925.sp3            # [输入] DOY 349
-    ├── whu22926.sp3            # [输入] DOY 350
     ├── whu23710_new.sp3        # [输入] csp3 新格式（GPS 周 2371, DOY 310, 2901 epochs, 261 sats）
     ├── whu23711_new.sp3        # [输入] DOY 311
     ├── whu23712_new.sp3        # [输入] DOY 312
     ├── whu23713_new.sp3        # [输入] DOY 313
     ├── GLwhu22924.sp3          # [输入] 融合 CLK 后的联合 SP3（GNSS 钟差精确）
     ├── Cwhu22924.sp3           # [输出] 所有卫星添加误差后的 SP3（由 simusp3.m 生成）
-    ├── Cwhu22925.sp3           # [输出] DOY 349 含误差
-    ├── Cwhu22926.sp3           # [输出] DOY 350 含误差
     ├── Cwhu23710_new.sp3       # [输出] csp3 新格式含误差（由 batch_simusp3.m 生成）
     ├── Cwhu23711_new.sp3       # [输出] DOY 311 含误差
     ├── Cwhu23712_new.sp3       # [输出] DOY 312 含误差
     ├── Cwhu23713_new.sp3       # [输出] DOY 313 含误差
     ├── CGLwhu22924.sp3         # [输出] GL 版本含误差（SimuSp3_16.m，仅 LEO 添加误差）
     ├── Swhu22924.sp3           # [中间] 疑为原始/备份的 SP3
-    ├── Swhu22925.sp3           # [中间] DOY 349
-    │
-    ├── SP3.mat                 # [中间] 含误差的 SP3 数据（sp3p + sp3v 结构体）
-    ├── ephe.mat                # [中间] 各卫星误差统计（R_E/T_E/N_E/C_E, RMS, SISRE 等）
     │
     ├── 只添加低轨钟差误差/      # [输出目录] SimuSp3_16.m 的输出结果
     │   └── Cwhu22924.sp3
     │
     └── 所有卫星钟差都添加/      # [输出目录] simusp3.m 的输出结果
-        ├── Cwhu22924.sp3
-        └── Cwhu22925.sp3
+        └── Cwhu22924.sp3
 
 ### 文件命名规则
 - whu{周}{DOY}.sp3: 输入无误差联合 SP3，来自上游 csp3 项目
