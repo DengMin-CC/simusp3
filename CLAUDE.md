@@ -128,6 +128,18 @@ ls -lh /f/LeoSingle/gnssdata/data/projects/simusp3/Cwhu*_obs_simu.sp3
 - 输出命名：`Cwhu{GPS周}{周内序号}_obs_simu.sp3`
 - 数据目录文档：`gnssdata/data/projects/simusp3/README.md`
 
+**代码质量修复（/simplify 审查）**
+- `readsp3.m`：修复 sscanf 空行崩溃（`+  ` 行守卫 `length >= 5`）、`fclose('all')`→`fclose(fid)`、`global NsatLEO` 去重
+- `writesp3.m`：修复 sscanf 空行崩溃、`epno` 边界保护（`min(max(...))`）
+- `batch_simusp3.m`：硬编码 `epoch 1440` 改为 `floor(NoEp/2)`，适配不同长度 SP3
+- `sp3p2sp3v.m`：添加 `NoEp < nlag` 防御性检查（提前返回 NaN 速度）
+- `verify_simu.m`：从脚本改为函数 `verify_simu(insp3, outsp3)`
+- 主脚本 `simusp3.m`/`SimuSp3_16.m`：移除危险 `delete('*.mat')`/`delete('*.asv')`
+
+**清理冗余文件（6 个，确认无调用者后删除）**
+- `debug_simu.m`、`simugn.m`（旧版白噪声，已被 simuar2.m 取代）
+- `rv2rsw.m`、`unit.m`、`mag.m`、`matvecmult.m`（无任何引用）
+
 ---
 
 #### 2026-04-21 批处理与性能优化（csp3 新文件）
@@ -218,6 +230,7 @@ ls -lh /f/LeoSingle/gnssdata/data/projects/simusp3/Cwhu*_obs_simu.sp3
     ├── fundarg.m               # 基本天文参数计算（Delauany 变量）
     ├── iau80in.m               # IAU 1980 章动系数加载（读取 nut80.dat）
     ├── lag.m                   # 10 阶 Lagrange 插值函数
+    ├── gmstime.m               # Greenwich 恒星时计算（被 sidereal.m 调用）
     ├── nut80.dat               # IAU 1980 章动系数表（106 组系数）
     │
     ├── start-claude-glm.cmd    # Claude Code 启动脚本（GLM 模型）
