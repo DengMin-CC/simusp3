@@ -29,6 +29,7 @@ idx = 1;
 while idx <= N
     tline = all_lines{idx};
     if isempty(tline), idx = idx + 1; continue; end
+    if length(tline) < 2, idx = idx + 1; continue; end
 
     if tline(1) == '*'
         break;
@@ -43,7 +44,7 @@ while idx <= N
         end
     elseif strcmp(tline(1:2),'##')
         sp3int = sscanf(tline(25:38),'%f');
-    elseif strcmp(tline(1),'+') && ~strcmp(tline(1:2),'++')
+    elseif length(tline) >= 5 && strcmp(tline(1),'+') && ~strcmp(tline(1:2),'++')
         temp = sscanf(tline(2:6),'%d');
         if ~isnan(temp), NoSat = temp; end
     end
@@ -52,14 +53,17 @@ while idx <= N
 end
 
 % Phase 2: process epoch data
+NoEp = size(sp3p.recefe, 1);
 while idx <= N
     tline = all_lines{idx};
     if isempty(tline), idx = idx + 1; continue; end
+    if length(tline) < 2, idx = idx + 1; continue; end
 
     if tline(1) == '*'
         ep = sscanf(tline(2:end),'%f',[1,6]);
         tc_str = datestr(ep,'yyyy-mm-dd HH:MM:SS');
         epno = round((etime(datevec(tc_str),datevec(ts_str))/sp3int) + 1);
+        if epno < 1 || epno > NoEp, epno = min(max(epno,1),NoEp); end
         out{end+1} = tline;
         idx = idx + 1;
 
@@ -67,7 +71,7 @@ while idx <= N
             if idx > N, break; end
             sl = all_lines{idx};
             idx = idx + 1;
-            if isempty(sl), continue; end
+            if isempty(sl) || length(sl) < 4, continue; end
             if sl(2) == 'G'
                 sno = sscanf(sl(3:4),'%d');
                 out{end+1} = sprintf('PG%02d%14.6f%14.6f%14.6f%14.6f',sno,...

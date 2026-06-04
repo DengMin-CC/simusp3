@@ -1,26 +1,24 @@
 clear
 clc
-delete('*.mat');
-delete('*.asv');
 
 global NsatGPS NsatGLO NsatGAL NsatCMP NsatLEO hleo
-% ³£Á¿
+% ï¿½ï¿½ï¿½ï¿½
 mu      = 3.986004405e14;
 omega_e = 7.29211514670698e-05;
 Re      = 6378.137*1e3;
 R2D     = 180/pi;
 dt      = 1e-3;
 clight  = 2.99792458*1e8;
-% ÎÀÐÇÊý
-%2024 0306 Ö»´¦ÀíµÍ¹ìÎÀÐÇ
+% ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+%2024 0306 Ö»ï¿½ï¿½ï¿½ï¿½ï¿½Í¹ï¿½ï¿½ï¿½ï¿½ï¿½
 NsatGPS = 32;
 NsatGLO = 27;
 NsatGAL = 52;
 NsatCMP = 61;
 NsatLEO = 150;
-% ÎÀÐÇ¸ß¶È
+% ï¿½ï¿½ï¿½Ç¸ß¶ï¿½
 hleo    = 1100*1e3;
-% ³õÊ¼×´Ì¬¶ÔÓ¦GPSÊ±(gpst 2019.03.31 00:00:00)
+% ï¿½ï¿½Ê¼×´Ì¬ï¿½ï¿½Ó¦GPSÊ±(gpst 2019.03.31 00:00:00)
 leapsec = 18.0;
 ut1_utc = 122353*1e-7;
 tt_gps  = 32.184 + 19.0;
@@ -29,7 +27,7 @@ jdutc   = jdgps - leapsec/86400.0;
 jdut1   = jdutc + ut1_utc/86400.0;
 jdtt    = jdgps + tt_gps/86400.0;
 ttt     = (jdtt - 2451545.0)/36525.0;
-% ecef2eciÆäËü²ÎÊý
+% ecef2eciï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 lod     = -4047*1e-7;
 xp      = 187693*1e-6;
 yp      = 206272*1e-6;
@@ -37,8 +35,8 @@ eqeterms= 2;
 ddpsi   = 0;
 ddeps   = 0;
 aecef   = [0; 0; 0];
-% SISRE, R, T, NÎó²îÉèÖÃ
-%2024 0306 ÎªÁËÂú×ãÊµ²âÊý¾ÝFPPP·ÂÕæ×÷ÁËÐÞ¸Ä£¬Ê¹µÃ¹ìµÀÎó²îÎª5cm
+% SISRE, R, T, Nï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+%2024 0306 Îªï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Êµï¿½ï¿½ï¿½ï¿½ï¿½ï¿½FPPPï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Þ¸Ä£ï¿½Ê¹ï¿½Ã¹ï¿½ï¿½ï¿½ï¿½ï¿½Îª5cm
 r_amp_avg      = 0.030;
 % r_amp_avg      = 0.070;
 r_amp_std      = 0.003;
@@ -118,7 +116,7 @@ for j = 1:MaxSat
 %     if j>=10
 %         break;
 %     end
-    % ·ÂÕæÃ¿¿ÅÎÀÐÇµÄSISREºÍRTNÎó²î
+    % ï¿½ï¿½ï¿½ï¿½Ã¿ï¿½ï¿½ï¿½ï¿½ï¿½Çµï¿½SISREï¿½ï¿½RTNï¿½ï¿½ï¿½
     [w_r,w_ac2,T,sid] = selconf(j);
     
     [r_e] = simuar2(NoEp,j + MaxSat*1,sp3int,r_amp(j),T,r_phi(j),r_disp(j),r_std);
@@ -129,11 +127,11 @@ for j = 1:MaxSat
     else
         c_dispuse = c_disp(j);
     end
-    %2024 0306 DM ÎªÁË·ÂÕæÎó²î½«1/2¹ìµÀÖÜÆÚ
+    %2024 0306 DM Îªï¿½Ë·ï¿½ï¿½ï¿½ï¿½ï¿½î½«1/2ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 %     T=T/2;
     [c_e] = simuar2(NoEp,j + MaxSat*4,sp3int,c_amp(j),T,c_phi(j),c_dispuse,c_std);
     
-    %2024 0516 DM ÈôÖ»Ìí¼ÓµÍ¹ìµÄÎÀÐÇÖÓ²îÎó²î£¬¿ÉÒÔ´ò¿ª
+    %2024 0516 DM ï¿½ï¿½Ö»ï¿½ï¿½ï¿½ÓµÍ¹ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ó²ï¿½ï¿½ï¿½î£¬ï¿½ï¿½ï¿½Ô´ï¿½
     if j<173
         for n_rtnc=1:length(r_e)
             r_e(n_rtnc)=0;
@@ -203,7 +201,7 @@ for j = 1:MaxSat
         sp3p.recefe(i,4,j) = sp3p.recef(i,4,j) + c_e(i)/clight;
     end
 end
-% Êä³ö°üº¬Îó²îµÄsp3ÎÄ¼þ
+% ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½sp3ï¿½Ä¼ï¿½
 %%
 writesp3(insp3,outsp3,sp3p);
 save SP3.mat sp3p sp3v;

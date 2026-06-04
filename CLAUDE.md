@@ -12,6 +12,57 @@
 - 修改代码时先说思路，再给代码
 - 常规文件修改不需要征求用户意见，直接改即可
 
+## 快速启动
+
+**一键仿真（推荐）**：
+```bash
+cd F:\LeoSingle\simusp3
+python run_simusp3.py 2025 314 315       # DOY 314-315
+python run_simusp3.py 2025 314            # 单天
+python run_simusp3.py 2025 314 315 --force # 强制覆盖已有
+```
+
+脚本自动完成：查找 csp3 输入 → MATLAB 误差仿真 → 归档到 gnssdata。
+
+**单天耗时**：~45 秒（MATLAB 读取+仿真+写入）
+
+**前置依赖**：
+- MATLAB（`D:\matlab\bin\matlab.exe`）
+- csp3 项目已生成对应 DOY 的联合 SP3 输入文件
+
+**数据归档**：
+- 仿真产出物自动归档到 `F:\LeoSingle\gnssdata\data\projects\simusp3/`
+- 数据目录说明见 `F:\LeoSingle\gnssdata\data\projects\simusp3\README.md`
+
+## 新增 DOY 操作流
+
+当需要仿真新的 DOY 时，按以下步骤执行：
+
+### 第 1 步：检查 csp3 输入
+确认 csp3 已生成对应 DOY 的联合 SP3：
+```
+F:\LeoSingle\gnssdata\data\projects\csp3\output\whu{week}{weekday}_obs_simu.sp3
+```
+如缺失，需在 csp3 项目中先生成。
+
+### 第 2 步：运行 run_simusp3.py
+```bash
+cd F:\LeoSingle\simusp3
+python run_simusp3.py <year> <doy_start> [doy_end]
+```
+
+### 第 3 步：验证输出
+检查输出文件大小和内容：
+```bash
+ls -lh /f/LeoSingle/gnssdata/data/projects/simusp3/Cwhu*_obs_simu.sp3
+```
+正常大小约 47-49 MB。
+
+### 第 4 步：更新文档
+- 更新 `gnssdata/data/projects/simusp3/README.md` 中的已有数据表
+- 更新本文件"已处理的 SP3 文件"表
+- `git add` + `git commit` + `git push`
+
 ## 版本控制规范
 
 ### 仓库信息
@@ -55,6 +106,29 @@
 - 危险修改示例：改 seed 值、改 amp/std 参数、改坐标转换公式
 
 ### 变更日志
+
+#### 2026-06-04 自动化工作体系建设
+
+**新增**
+- `run_simusp3.py`：Python 自动化入口脚本（参考 oi/run_oi.py 模式）
+  - 命令行参数：年份 + DOY 范围
+  - 自动 GPS 周计算与输入文件查找（新格式 + 旧格式兼容）
+  - 跳过已存在输出（`--force` 强制覆盖）
+  - 计时汇总
+
+**重构**
+- `batch_simusp3.m`：从脚本改为函数，接收 `input_path`/`output_path` 参数
+  - 移除硬编码文件列表（循环由 Python 驱动）
+  - 移除危险的 `delete('*.mat')`/`delete('*.asv')`
+  - 使用绝对路径，不依赖 MATLAB 工作目录
+  - 核心计算代码（常量/旋转矩阵/随机种子/卫星循环）完全不动
+
+**输出归档**
+- 产出物归档到 `gnssdata/data/projects/simusp3/`（独立项目目录）
+- 输出命名：`Cwhu{GPS周}{周内序号}_obs_simu.sp3`
+- 数据目录文档：`gnssdata/data/projects/simusp3/README.md`
+
+---
 
 #### 2026-04-21 批处理与性能优化（csp3 新文件）
 
@@ -124,33 +198,26 @@
     F:\LeoSingle\simusp3    │
     ├── simusp3.m               # [主脚本 V1] 所有卫星（GNSS+LEO）都添加轨道/钟差误差
     ├── SimuSp3_16.m            # [主脚本 V2] 仅 LEO 卫星添加轨道/钟差误差，GNSS 保持无误差
-    ├── batch_simusp3.m         # [批量处理] V1 行为，预计算 R 矩阵 + 向量化误差叠加，多文件循环
+    ├── run_simusp3.py           # [自动化] Python 驱动脚本，查找输入、调用 MATLAB、归档输出
+    ├── batch_simusp3.m          # [批量处理] V1 行为，预计算 R 矩阵 + 向量化误差叠加，单文件函数（由 run_simusp3.py 调用）
     │
     ├── readsp3.m               # SP3 文件读取函数：两遍扫描，解析头部信息、epoch 数据、卫星位置/钟差
     ├── writesp3.m              # SP3 文件写入函数：批量 I/O，将含误差的数据按 SP3-c 格式输出
     ├── sp3p2sp3v.m             # SP3 位置到速度：向量化 9 阶 Lagrange 插值 + 地球自转改正求速度
     ├── simuar2.m               # 误差仿真函数：正弦趋势 + AR(2) 时间序列噪声
-    ├── simugn.m                # [旧版] 误差仿真函数：正弦趋势 + 白噪声（已被 simuar2 替代）
     ├── selconf.m               # 卫星配置选择：根据 PRN 确定 SISRE 权重系数、轨道周期、系统类型
     ├── plotephe.m              # 误差结果可视化：R/T/N/C 的 RMS 柱状图 + 时间序列曲线
     ├── verify_simu.m           # [验证] 对比输入/输出 SP3，统计各卫星位置/钟差差异 RMS
-    ├── debug_simu.m            # [调试] 追踪坐标变换中间值，定位 NaN 来源
     │
     ├── ecef2eci.m              # ECEF 到 ECI 坐标转换（Vallado 算法，IAU-1980）
     ├── eci2ecef.m              # ECI 到 ECEF 坐标转换（Vallado 算法，IAU-1980）
-    ├── rv2rsw.m                # RTN（径向/切向/法向）坐标转换工具（辅助）
     ├── precess.m               # 岁差旋转矩阵（IAU-1980/2000）
     ├── nutation.m              # 章动旋转矩阵（IAU-1980）
     ├── sidereal.m              # 恒星时旋转矩阵
     ├── polarm.m                # 极移旋转矩阵
     ├── fundarg.m               # 基本天文参数计算（Delauany 变量）
     ├── iau80in.m               # IAU 1980 章动系数加载（读取 nut80.dat）
-    ├── gmstime.m               # 格林尼治平恒星时计算（MJD 输入）
-    ├── gstime.m                # 格林尼治恒星时计算（JD 输入，Vallado 原始版本）
     ├── lag.m                   # 10 阶 Lagrange 插值函数
-    ├── unit.m                  # 向量单位化
-    ├── mag.m                   # 向量求模
-    ├── matvecmult.m            # 矩阵x向量乘法
     ├── nut80.dat               # IAU 1980 章动系数表（106 组系数）
     │
     ├── start-claude-glm.cmd    # Claude Code 启动脚本（GLM 模型）
@@ -182,6 +249,7 @@
 - Cwhu{周}{DOY}.sp3: 输出所有卫星含误差的 SP3，由 simusp3.m 生成
 - Cwhu{周}{DOY}_new.sp3: csp3 新格式输出，由 batch_simusp3.m 生成
 - CGLwhu{周}{DOY}.sp3: 输出仅 LEO 含误差的 SP3，由 SimuSp3_16.m 生成
+- Cwhu{周}{DOY}_obs_simu.sp3: 新格式含误差输出（由 run_simusp3.py + batch_simusp3.m 生成）
 - Swhu{周}{DOY}.sp3: 备份/中间文件
 ---
 

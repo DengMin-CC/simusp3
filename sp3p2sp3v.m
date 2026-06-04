@@ -4,6 +4,8 @@ dt = 0.001;
 nlag = 10;
 if NoEp < nlag
     warning('sp3p2sp3v: NoEp=%d < nlag=%d, cannot compute velocities.', NoEp, nlag);
+    sp3v.vecef = NaN(NoEp,3,MaxSat);
+    sp3v.t = sp3p.t;
     return;
 end
 sp3v.vecef  = NaN(NoEp,3,MaxSat);

@@ -1,6 +1,6 @@
 function [sp3p,NoEp,MaxSat,sp3int] = readsp3(insp3)
 
-global NsatGPS NsatGLO NsatGAL NsatCMP NsatLEO NsatLEO
+global NsatGPS NsatGLO NsatGAL NsatCMP NsatLEO
 
 [fid,errmsg] = fopen(insp3,'r');
 
@@ -21,19 +21,24 @@ while ~feof(fid)
     if isempty(tline), continue; end
     if tline(1) == '*'
         NoEp = NoEp + 1;
-    elseif strcmp(tline(1),'#') && ~strcmp(tline(1:2),'##')
+    elseif length(tline) >= 2 && strcmp(tline(1),'#') && ~strcmp(tline(1:2),'##')
         date = sscanf(tline(4:31),'%f',[1,6]);
         if ~isempty(date) && length(date) == 6
             ts_str = datestr(date,'yyyy-mm-dd HH:MM:SS');
         end
     elseif strcmp(tline(1:2),'##')
         sp3int = sscanf(tline(25:38),'%f');
-    elseif strcmp(tline(1),'+') && ~strcmp(tline(1:2),'++')
+    elseif length(tline) >= 5 && strcmp(tline(1),'+') && ~strcmp(tline(1:2),'++')
         temp = sscanf(tline(2:6),'%d');
         if ~isnan(temp)
             NoSat = temp;
         end
     end
+end
+
+% Validate header parsing
+if isempty(ts_str)
+    error('readsp3: no epoch reference time found in header');
 end
 
 % Initialize arrays with counted epoch number
@@ -48,6 +53,7 @@ frewind(fid);
 while ~feof(fid)
     tline = fgetl(fid);
     if isempty(tline), continue; end
+    if length(tline) < 2, continue; end
     % Skip header lines
     if tline(1) == '#' || tline(1) == '+' || tline(1) == '%' || tline(1) == '/'
         continue
@@ -56,10 +62,12 @@ while ~feof(fid)
     if tline(1) == '*'
         ep = sscanf(tline(2:end),'%f',[1,6]);
         tc_str=datestr(ep,'yyyy-mm-dd HH:MM:SS');
-        epno = (etime(datevec(tc_str),datevec(ts_str))/sp3int) + 1;
+        epno = round((etime(datevec(tc_str),datevec(ts_str))/sp3int) + 1);
         sp3p.t(epno) = datenum(datevec(tc_str));
         for k = 1:NoSat
             tline = fgetl(fid);
+            if isempty(tline) || isnumeric(tline), continue; end
+            if length(tline) < 4, continue; end
             if     strcmp(tline(2),'G')
                 sno  = sscanf(tline(3:4),'%d');
             elseif strcmp(tline(2),'R')
@@ -75,11 +83,12 @@ while ~feof(fid)
             end
             % writing part
             temp = sscanf(tline(5:end),'%f',[1,4]);
+            if length(temp) < 4, continue; end
             sp3p.recef(epno,1:3,sno) = temp(1:3)*1000; %meter
             sp3p.recef(epno,  4,sno) = temp(4)*10^-6;  %second
         end
     end
 end
-fclose('all');
+fclose(fid);
 
 end

@@ -1,14 +1,13 @@
+function verify_simu(insp3, outsp3)
 % verify_simu.m - Verify error simulation results
 % Compare input vs output SP3 to check error magnitudes
-
-clear; clc;
+%
+% Usage:
+%   matlab -batch "verify_simu('input.sp3', 'output.sp3')"
 
 global NsatGPS NsatGLO NsatGAL NsatCMP NsatLEO
 NsatGPS = 32; NsatGLO = 27; NsatGAL = 52; NsatCMP = 61; NsatLEO = 150;
 MaxSat = NsatGPS + NsatGLO + NsatGAL + NsatCMP + NsatLEO;
-
-insp3  = 'whu23710_new.sp3';
-outsp3 = 'Cwhu23710_new.sp3';
 
 fprintf('===== Verifying %s vs %s =====\n\n', insp3, outsp3);
 
@@ -136,3 +135,4 @@ else
 end
 
 fprintf('\n===== Verification complete =====\n');
+end

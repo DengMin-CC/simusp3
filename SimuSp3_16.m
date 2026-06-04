@@ -1,7 +1,5 @@
 clear
 clc
-delete('*.mat');
-delete('*.asv');
 
 global NsatGPS NsatGLO NsatGAL NsatCMP NsatLEO hleo
 % 常量

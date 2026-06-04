@@ -1,15 +1,18 @@
-% batch_simusp3.m - Batch process multiple SP3 files with orbit/clock error simulation
-% Behavior: V1 - all satellites (GNSS + LEO) get errors, clock period T/2
-% Based on SimuSp3_16.m configuration
-% Input:  whu{week}{day}_new.sp3  (from upstream csp3 project)
-% Output: Cwhu{week}{day}_new.sp3
+function batch_simusp3(input_path, output_path)
+% batch_simusp3.m - Process a single SP3 file with orbit/clock error simulation
+% V1: all satellites (GNSS + LEO) get errors, clock period T/2
+%
+% Usage (from Python):
+%   matlab -batch "batch_simusp3('input.sp3', 'output.sp3')"
+% Usage (interactive):
+%   batch_simusp3('path/to/input.sp3', 'path/to/output.sp3')
+%
+% Args:
+%   input_path  - full path to input SP3 file (from csp3)
+%   output_path - full path to output SP3 file (to simusp3 archive)
 %
 % Optimization: rotation matrix is precomputed once (EOP parameters are fixed),
 % inner epoch loop is fully vectorized (eliminated ~752k ecef2eci/eci2ecef calls per file)
-
-clear; clc;
-delete('*.mat');
-delete('*.asv');
 
 global NsatGPS NsatGLO NsatGAL NsatCMP NsatLEO hleo
 % Constants
@@ -90,128 +93,127 @@ c_phi = r_phi;
 s = RandStream('mcg16807','Seed',30004); RandStream.setGlobalStream(s);
 c_disp = c_disp_avg + c_disp_std*randn(MaxSat,1);
 
-% File list
-file_list = {'whu23710_new.sp3', 'whu23711_new.sp3', 'whu23712_new.sp3', 'whu23713_new.sp3'};
+% ===== Single file processing =====
+insp3  = input_path;
+outsp3 = output_path;
 
-for fidx = 1:length(file_list)
-    insp3  = file_list{fidx};
-    outsp3 = ['C' insp3];
+fprintf('\n===== Processing %s =====\n', insp3);
+fprintf('  Output: %s\n', outsp3);
 
-    fprintf('\n===== Processing %s -> %s =====\n', insp3, outsp3);
+if ~exist(insp3, 'file')
+    error('Input file not found: %s', insp3);
+end
 
-    if ~exist(insp3, 'file')
-        fprintf('WARNING: %s not found, skipping.\n', insp3);
+tic_read = tic;
+[sp3p, NoEp, MaxSat, sp3int] = readsp3(insp3);
+[sp3v] = sp3p2sp3v(sp3p, NoEp, MaxSat);
+fprintf('  Read + velocity: %.1f s\n', toc(tic_read));
+
+% Initialize ephe accumulation
+ephe_init = false;
+
+tic_sat = tic;
+for j = 1:MaxSat
+    mid = max(1, floor(NoEp/2));
+    if isnan(sum(sp3p.recef(mid,1:4,j)))
         continue;
     end
 
-    tic_read = tic;
-    [sp3p, NoEp, MaxSat, sp3int] = readsp3(insp3);
-    [sp3v] = sp3p2sp3v(sp3p, NoEp, MaxSat);
-    fprintf('  Read + velocity: %.1f s\n', toc(tic_read));
+    [w_r, w_ac2, T, sid] = selconf(j);
 
-    % Initialize ephe accumulation
-    ephe_init = false;
-
-    tic_sat = tic;
-    for j = 1:MaxSat
-        if isnan(sum(sp3p.recef(1440,1:4,j)))
-            continue;
-        end
-
-        [w_r, w_ac2, T, sid] = selconf(j);
-
-        [r_e] = simuar2(NoEp, j + MaxSat*1, sp3int, r_amp(j), T, r_phi(j), r_disp(j), r_std);
-        [t_e] = simuar2(NoEp, j + MaxSat*2, sp3int, t_amp(j), T, t_phi(j), t_disp(j), t_std);
-        [n_e] = simuar2(NoEp, j + MaxSat*3, sp3int, n_amp(j), T, n_phi(j), n_disp(j), n_std);
-        if abs(c_disp(j) - r_disp(j)) > abs(c_disp(j))
-            c_dispuse = 0 - c_disp(j);
-        else
-            c_dispuse = c_disp(j);
-        end
-        % V1: half orbital period for clock trend
-        T_half = T/2;
-        [c_e] = simuar2(NoEp, j + MaxSat*4, sp3int, c_amp(j), T_half, c_phi(j), c_dispuse, c_std);
-
-        % V1: all satellites get errors (no j<173 filtering)
-
-        % --- Statistics ---
-        rms_r = sqrt(sum(r_e.^2)/NoEp);
-        rms_t = sqrt(sum(t_e.^2)/NoEp);
-        rms_n = sqrt(sum(n_e.^2)/NoEp);
-        rms_c = sqrt(sum(c_e.^2)/NoEp);
-        sisre = sqrt(sum((w_r*r_e - c_e).^2)/NoEp + w_ac2*(sum(t_e.^2)/NoEp + sum(n_e.^2)/NoEp));
-
-        if ~ephe_init
-            R_E = r_e; T_E = t_e; N_E = n_e; C_E = c_e;
-            RMS_R = rms_r; RMS_T = rms_t; RMS_N = rms_n; RMS_C = rms_c;
-            SISRE = sisre; W_R = w_r; W_AC2 = w_ac2; SID = sid;
-            ephe_init = true;
-        else
-            R_E = [R_E r_e]; T_E = [T_E t_e]; N_E = [N_E n_e]; C_E = [C_E c_e];
-            RMS_R = [RMS_R rms_r]; RMS_T = [RMS_T rms_t]; RMS_N = [RMS_N rms_n]; RMS_C = [RMS_C rms_c];
-            SISRE = [SISRE sisre]; W_R = [W_R w_r]; W_AC2 = [W_AC2 w_ac2]; SID = [SID; sid];
-        end
-
-        % ===== Vectorized error application (no inner epoch loop) =====
-        % Extract all epochs at once (NoEp x 3, in mm / mm/s)
-        recef_mm = sp3p.recef(:,1:3,j);
-        vecef_mm = sp3v.vecef(:,1:3,j);
-        recef_km = recef_mm / 1000;
-        vecef_km = vecef_mm / 1000;
-
-        % ECEF -> ECI (matrix multiply, no per-epoch function call)
-        reci_km = recef_km * R';               % NoEp x 3
-
-        % Velocity with Earth rotation correction
-        % cross([0,0,w], rpef) = [-w*y, w*x, 0]
-        rpef_km = recef_km * pm_mat';
-        cross_w = zeros(NoEp, 3);
-        cross_w(:,1) = -thetasa * rpef_km(:,2);
-        cross_w(:,2) =  thetasa * rpef_km(:,1);
-        veci_km = (vecef_km * pm_mat' + cross_w) * R1';
-
-        % Convert to mm for RTN
-        reci_mm = reci_km * 1000;
-        veci_mm = veci_km * 1000;
-
-        % RTN basis vectors (vectorized over all epochs)
-        r_norm = sqrt(sum(reci_mm.^2, 2));     % NoEp x 1
-        g1 = reci_mm ./ r_norm;                % radial
-        h  = cross(reci_mm, veci_mm);
-        h_norm = sqrt(sum(h.^2, 2));
-        g3 = h ./ h_norm;                      % normal
-        g2 = cross(g3, g1);                    % tangential
-
-        % Apply RTN errors: xyz = g1*r + g2*t + g3*n (broadcasting)
-        % simuar2 returns column vector (NoEp x 1), use directly for broadcasting
-        xyz = g1 .* r_e + g2 .* t_e + g3 .* n_e;
-
-        % Add errors in ECI, then convert back to ECEF
-        recie_km = (reci_mm + xyz) / 1000;
-        recefe_km = recie_km * R;              % ECI -> ECEF (R' inverse)
-        recefe_mm = recefe_km * 1000;
-
-        % Store results
-        sp3p.reci(:,1:3,j)  = reci_mm;
-        sp3v.veci(:,1:3,j) = veci_mm;
-        sp3p.recie(:,1:3,j) = reci_mm + xyz;
-        sp3p.recefe(:,1:3,j) = recefe_mm;
-        sp3p.recefe(:,4,j)   = sp3p.recef(:,4,j) + c_e(:) / clight;
+    [r_e] = simuar2(NoEp, j + MaxSat*1, sp3int, r_amp(j), T, r_phi(j), r_disp(j), r_std);
+    [t_e] = simuar2(NoEp, j + MaxSat*2, sp3int, t_amp(j), T, t_phi(j), t_disp(j), t_std);
+    [n_e] = simuar2(NoEp, j + MaxSat*3, sp3int, n_amp(j), T, n_phi(j), n_disp(j), n_std);
+    if abs(c_disp(j) - r_disp(j)) > abs(c_disp(j))
+        c_dispuse = 0 - c_disp(j);
+    else
+        c_dispuse = c_disp(j);
     end
-    fprintf('  Error simulation: %.1f s\n', toc(tic_sat));
+    % V1: half orbital period for clock trend
+    T_half = T/2;
+    [c_e] = simuar2(NoEp, j + MaxSat*4, sp3int, c_amp(j), T_half, c_phi(j), c_dispuse, c_std);
 
-    tic_write = tic;
-    writesp3(insp3, outsp3, sp3p);
-    fprintf('  Write SP3: %.1f s\n', toc(tic_write));
+    % V1: all satellites get errors (no j<173 filtering)
 
-    % Save per-file results with tag
-    tag = regexp(insp3, 'whu(\d+)_new\.sp3', 'tokens', 'once');
-    if ~isempty(tag)
-        save(sprintf('SP3_%s.mat', tag{1}), 'sp3p', 'sp3v');
-        save(sprintf('ephe_%s.mat', tag{1}), 'R_E', 'T_E', 'N_E', 'C_E', 'RMS_R', 'RMS_T', 'RMS_N', 'RMS_C', 'SISRE', 'W_R', 'W_AC2', 'SID');
+    % --- Statistics ---
+    rms_r = sqrt(sum(r_e.^2)/NoEp);
+    rms_t = sqrt(sum(t_e.^2)/NoEp);
+    rms_n = sqrt(sum(n_e.^2)/NoEp);
+    rms_c = sqrt(sum(c_e.^2)/NoEp);
+    sisre = sqrt(sum((w_r*r_e - c_e).^2)/NoEp + w_ac2*(sum(t_e.^2)/NoEp + sum(n_e.^2)/NoEp));
+
+    if ~ephe_init
+        R_E = r_e; T_E = t_e; N_E = n_e; C_E = c_e;
+        RMS_R = rms_r; RMS_T = rms_t; RMS_N = rms_n; RMS_C = rms_c;
+        SISRE = sisre; W_R = w_r; W_AC2 = w_ac2; SID = sid;
+        ephe_init = true;
+    else
+        R_E = [R_E r_e]; T_E = [T_E t_e]; N_E = [N_E n_e]; C_E = [C_E c_e];
+        RMS_R = [RMS_R rms_r]; RMS_T = [RMS_T rms_t]; RMS_N = [RMS_N rms_n]; RMS_C = [RMS_C rms_c];
+        SISRE = [SISRE sisre]; W_R = [W_R w_r]; W_AC2 = [W_AC2 w_ac2]; SID = [SID; sid];
     end
 
-    fprintf('===== %s done =====\n', outsp3);
+    % ===== Vectorized error application (no inner epoch loop) =====
+    % Extract all epochs at once (NoEp x 3, in mm / mm/s)
+    recef_mm = sp3p.recef(:,1:3,j);
+    vecef_mm = sp3v.vecef(:,1:3,j);
+    recef_km = recef_mm / 1000;
+    vecef_km = vecef_mm / 1000;
+
+    % ECEF -> ECI (matrix multiply, no per-epoch function call)
+    reci_km = recef_km * R';               % NoEp x 3
+
+    % Velocity with Earth rotation correction
+    % cross([0,0,w], rpef) = [-w*y, w*x, 0]
+    rpef_km = recef_km * pm_mat';
+    cross_w = zeros(NoEp, 3);
+    cross_w(:,1) = -thetasa * rpef_km(:,2);
+    cross_w(:,2) =  thetasa * rpef_km(:,1);
+    veci_km = (vecef_km * pm_mat' + cross_w) * R1';
+
+    % Convert to mm for RTN
+    reci_mm = reci_km * 1000;
+    veci_mm = veci_km * 1000;
+
+    % RTN basis vectors (vectorized over all epochs)
+    r_norm = sqrt(sum(reci_mm.^2, 2));     % NoEp x 1
+    g1 = reci_mm ./ r_norm;                % radial
+    h  = cross(reci_mm, veci_mm);
+    h_norm = sqrt(sum(h.^2, 2));
+    g3 = h ./ h_norm;                      % normal
+    g2 = cross(g3, g1);                    % tangential
+
+    % Apply RTN errors: xyz = g1*r + g2*t + g3*n (broadcasting)
+    % simuar2 returns column vector (NoEp x 1), use directly for broadcasting
+    xyz = g1 .* r_e + g2 .* t_e + g3 .* n_e;
+
+    % Add errors in ECI, then convert back to ECEF
+    recie_km = (reci_mm + xyz) / 1000;
+    recefe_km = recie_km * R;              % ECI -> ECEF (R' inverse)
+    recefe_mm = recefe_km * 1000;
+
+    % Store results
+    sp3p.reci(:,1:3,j)  = reci_mm;
+    sp3v.veci(:,1:3,j) = veci_mm;
+    sp3p.recie(:,1:3,j) = reci_mm + xyz;
+    sp3p.recefe(:,1:3,j) = recefe_mm;
+    sp3p.recefe(:,4,j)   = sp3p.recef(:,4,j) + c_e(:) / clight;
+end
+fprintf('  Error simulation: %.1f s\n', toc(tic_sat));
+
+tic_write = tic;
+writesp3(insp3, outsp3, sp3p);
+fprintf('  Write SP3: %.1f s\n', toc(tic_write));
+
+% Save diagnostics to project directory
+save_dir = fileparts(mfilename('fullpath'));
+tag = regexp(insp3, 'whu(\d+)', 'tokens', 'once');
+if ~isempty(tag)
+    save(fullfile(save_dir, sprintf('SP3_%s.mat', tag{1})), 'sp3p', 'sp3v');
+    save(fullfile(save_dir, sprintf('ephe_%s.mat', tag{1})), ...
+         'R_E', 'T_E', 'N_E', 'C_E', 'RMS_R', 'RMS_T', 'RMS_N', 'RMS_C', ...
+         'SISRE', 'W_R', 'W_AC2', 'SID');
 end
 
-fprintf('\n===== All files processed =====\n');
+fprintf('===== Done: %s =====\n', outsp3);
+end
